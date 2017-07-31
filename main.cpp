@@ -7,6 +7,9 @@
 #include "opencv2/highgui.hpp"
 #include <math.h>
 
+#define PI 3.14159265
+
+
 using namespace std;
 using namespace cv;
 
@@ -14,11 +17,20 @@ void extract_video();	//函数内可以修改读取文件名，输出文件名，编码格式以及帧数范
 void FindLine(Mat source, int arg);
 void ObjectDetect(VideoCapture cap);
 void FindRoadEdge(VideoCapture cap);
+void LineExtract(vector<Vec4i> lines, Mat img);		//从Hough Transform中提取的线段数据中找出代表路基的两条
+bool Vec4isort(Vec4i i, Vec4i j) {
+	int a = (i[1] < i[3] ? i[1] : i[3]);
+	int b = (j[1] < j[3] ? j[1] : j[3]);
+	if (a < b) return 1;
+	else return 0;
+}
+
+
 int main()
 {
 	//extract_video();
 
-	VideoCapture cap("data/clip_8.mp4");
+	VideoCapture cap("data/clip_1.mp4");
 
 	if (!cap.isOpened()) {
 		cerr << "can't open the video file!" << endl;
@@ -83,8 +95,8 @@ void FindLine(Mat source, int arg)
 	//waitKey(10000);
 
 	if (arg == 0) {
-		vector<Vec2f> lines;
-		HoughLines(dst, lines, 1, CV_PI / 180, 100);
+		vector<Vec2f> lines;		//Vec2f定义:typedef Vec<float, 2> Vec2f;
+		HoughLines(dst, lines, 1, CV_PI / 180, 160);
 
 		for (size_t i = 0; i < lines.size(); i++)
 		{
@@ -100,13 +112,16 @@ void FindLine(Mat source, int arg)
 		}
 	}
 	else {
-		vector<Vec4i> lines;
-		HoughLinesP(dst, lines, 1, CV_PI / 180, 80, 30, 10);
+		vector<Vec4i> lines;		//Vec4i定义：typedef Vec<int, 4> Vec4i;
+		HoughLinesP(dst, lines, 1, CV_PI / 180, 80, 50, 100);
 		for (size_t i = 0; i < lines.size(); i++)
 		{
 			line(color_dst, Point(lines[i][0], lines[i][1]),
-				Point(lines[i][2], lines[i][3]), Scalar(0, 0, 255), 3, 8);
+				Point(lines[i][2], lines[i][3]), Scalar(0, 0, 255), 2, 8);
+			//cout << "(" << lines[i][0] << "," << lines[i][1] << ")," << "(" << lines[i][2] << "," << lines[i][3] << ")" << endl;	//查看每一条线坐标
 		}
+		//cout << lines.size();
+		LineExtract(lines, color_dst);
 	}
 
 	namedWindow("Source", WINDOW_NORMAL);
@@ -114,6 +129,7 @@ void FindLine(Mat source, int arg)
 
 	namedWindow("Detected Lines", WINDOW_NORMAL);
 	imshow("Detected Lines", color_dst);
+	//imwrite("data/RoadEdge9.png", color_dst);
 
 	waitKey(0);
 }
@@ -163,25 +179,25 @@ void FindRoadEdge(VideoCapture cap)
 	
 	Mat background, src, current;
 	
-	for (int i = 1; i < 600; i++) {
-		cap >> src;
-		if (i == 1) {
-			background = src.clone();
-			current = src.clone();
-		}
-		else {
-			background = (current * (i - 1) + src) / i;
-			current = background.clone();
-		}
-		cout << i << endl;
-		//imshow("video", background);
-		//waitKey(1000);
-		/*if (waitKey(20) != 255) {
-			int n = waitKey(10000);
-			if (n == 27) break;
-		}*/
-	}
-	imwrite("background.png", background);
+	//for (int i = 1; i < 600; i++) {
+	//	cap >> src;
+	//	if (i == 1) {
+	//		background = src.clone();
+	//		current = src.clone();
+	//	}
+	//	else {
+	//		background = (current * (i - 1) + src) / i;
+	//		current = background.clone();
+	//	}
+	//	cout << i << endl;
+	//	//imshow("video", background);
+	//	//waitKey(1000);
+	//	/*if (waitKey(20) != 255) {
+	//		int n = waitKey(10000);
+	//		if (n == 27) break;
+	//	}*/
+	//}
+	//imwrite("background.png", background);
 	
 	background = imread("background.png");
 	namedWindow("video", WINDOW_NORMAL);
@@ -216,7 +232,7 @@ void FindRoadEdge(VideoCapture cap)
 			}
 			if (mid_line[j] == 255 && count > threshold - 2) cur_line[j] = 0;
 			else cur_line[j] = 255;
-			if (i < nr / 5) cur_line[j] = 255;
+			if (i < nr / 5 || i > nr * 0.85) cur_line[j] = 255;
 			if (j > nc / 2) cur_line[j] = 255;
 		}
 	}     // 把图像边缘像素设置为255
@@ -227,7 +243,7 @@ void FindRoadEdge(VideoCapture cap)
 
 	imshow("video", result);
 	waitKey(0);
-
+	//imwrite("data/RoadEdge1.png", result);
 	FindLine(result,1);
 	//for (;;) {
 	//	frame1 = frame2.clone();
@@ -260,4 +276,45 @@ void FindRoadEdge(VideoCapture cap)
 	//		}
 	//	}
 	//}
+}
+
+void LineExtract(vector<Vec4i> lines, Mat img)
+{
+	cout << lines.size() << endl;
+	sort(lines.begin(), lines.end(), Vec4isort);
+	Vec4d up, down;		//indicate the upside edge and downside edge
+	up = lines[0];
+	down = lines[lines.size() - 1];
+	cout << "(" << up[0] << "," << up[1] << ")," << "(" << up[2] << "," << up[3] << ")" << endl;
+	cout << "(" << down[0] << "," << down[1] << ")," << "(" << down[2] << "," << down[3] << ")" << endl;
+	Vec2d v_up((up[2] - up[0]), (up[3] - up[1]));
+	Vec2d v_down((down[2] - down[0]), (down[3] - down[1]));	//将up down两条线变成两个二位向量，便于计算夹角。
+	vector<int> up_flags;
+	for (size_t i = 1; i < lines.size() - 1; i++) {
+		double param = 10;
+		double theta1, theta2;	//theta1表示当前线段与up/down方向的夹角的cos，theta2表示当前线段起点与up/down起点的连线与up/down线段的夹角的cos
+		Vec2d temp((lines[i][2] - lines[i][0]), (lines[i][3] - lines[i][1]));
+		theta1 = (temp[0] * v_up[0] + temp[1] * v_up[1])/(sqrt(v_up[0] * v_up[0] + v_up[1] * v_up[1]) * sqrt(temp[0] * temp[0] + temp[1] * temp[1]));
+		if (theta1 > cos(param * PI / 180.0)) {
+			temp[0] = lines[i][2] - up[0];
+			temp[1] = lines[i][3] - up[1];
+			theta2 = (temp[0] * v_up[0] + temp[1] * v_up[1]) / (sqrt(v_up[0] * v_up[0] + v_up[1] * v_up[1]) * sqrt(temp[0] * temp[0] + temp[1] * temp[1]));
+			if (theta2 > cos(param * PI / 180.0)) {
+				up_flags.push_back(i);
+			}
+		}
+
+		//cout << temp[0] << " " << temp[1] << endl;
+	}
+
+	for (size_t i = 0; i < up_flags.size(); i++) {
+		cout << up_flags[i] << endl;
+	}
+
+	for (size_t i = 0; i < lines.size(); i++)
+	{
+		line(img, Point(lines[i][0], lines[i][1]),
+			Point(lines[i][2], lines[i][3]), Scalar(0, 0, 255), 2, 8);
+		cout << "(" << lines[i][0] << "," << lines[i][1] << ")," << "(" << lines[i][2] << "," << lines[i][3] << ")" << endl;	//查看每一条线坐标
+	}
 }
