@@ -6,7 +6,8 @@
 #include "opencv2/video/tracking.hpp"
 #include "opencv2/highgui.hpp"
 #include <math.h>
-
+#include "utils.h"
+#include "objectdetection.h"
 #define PI 3.14159265
 
 
@@ -15,10 +16,9 @@ using namespace cv;
 
 void extract_video();	//函数内可以修改读取文件名，输出文件名，编码格式以及帧数范围
 vector<Vec2f> FindLine(Mat source, int arg);
-void ObjectDetect(VideoCapture cap);
 vector<Vec2f> FindRoadEdge(VideoCapture cap);
 vector<Vec2f> LineExtract(vector<Vec4i> lines, Mat img);		//从Hough Transform中提取的线段数据中找出代表路基的两条
-void DrawLine(Vec2f edge, Mat img);
+
 bool Vec4isort(Vec4i i, Vec4i j) {
 	int a = (i[1] < i[3] ? i[1] : i[3]);
 	int b = (j[1] < j[3] ? j[1] : j[3]);
@@ -36,58 +36,56 @@ int main()
 {
 	//extract_video();
 
-	VideoCapture cap("data/clip_9.mp4");
+	VideoCapture cap("data/clip_2.mp4");
 
 	if (!cap.isOpened()) {
 		cerr << "can't open the video file!" << endl;
 		return -1;
 	}
 	
+	//检测马路边界，确定监控范围
 	vector<Vec2f> edges = FindRoadEdge(cap);		//这里返回检测部分的路边界，以极坐标表示，edges[0],edges[1]分别是上下边界。edges[0][0]是r, edges[0][1]是theta。 edges[1]同理
 	Mat img = imread("background.png");
 	DrawLine(edges[0], img);
 	DrawLine(edges[1], img);
 
+	Point p1, p2;
+	for (int i = 0; i <= 1; i++) {
+		int width = img.cols;
+		float rho = edges[i][0];
+		float theta = edges[i][1];
+		double a = cos(theta), b = sin(theta);
+		double x0 = a*rho, y0 = b*rho;
+		Point pt1(0,
+			cvRound(y0 + x0 * (1 / tan(theta))));
+		Point pt2(width,
+			cvRound(y0 - (1 / tan(theta) * (width - x0))));
+		//line(img, pt1, pt2, Scalar(255), 3, 8);
+		if (i == 0) p1 = pt1;
+		else p2 = pt1;
+	}
+	Vec2f perspective_point = CalPerspectivePoint(edges);
+	Point p0(0, 0);
+	p0.y = p1.y + (p2.y - p1.y) * 0.66;
+	Point p4(perspective_point[0], perspective_point[1]);
+	line(img, p0, p4, Scalar(255), 3, 8);
+	Point p01(0, 0);
+	p01.y = p1.y + (p2.y - p1.y) * 0.31;
+	line(img, p01, p4, Scalar(255), 3, 8);
+
+	BoundingBox box1;
+	box1.initBox(0, edges, perspective_point, img, "up");
+	box1.drawBox(img);
+
+	//绘制RoadEdge Detection结果显示
 	namedWindow("edges", WINDOW_NORMAL);
 	imshow("edges", img);
 	waitKey(0);
 
+	//侦测行人以及车辆
+	ObjectDetect(cap, edges);
+
 	return 0;
-}
-
-void extract_video() {
-	//【1】读入视频
-	VideoCapture capture("data/4-12-17-A.MP4");
-
-	VideoWriter writer("data/A_cut_test.avi", CV_FOURCC('M', 'J', 'P', 'G'), 29, Size(1920, 1080));//注意此处视频的尺寸大小要与真实的一致
-																							  //【2】循环显示每一帧
-	int i = 0;
-	char name[50];
-	while (1)
-	{
-		Mat frame;//定义一个Mat变量，用于存储每一帧的图像
-		capture >> frame;  //读取当前帧
-		i++;
-		//若视频播放完成，退出循环
-		if (frame.empty())
-		{
-			break;
-		}
-
-		if (i>0 && i < 1000)
-		{
-			sprintf(name, "pictures\\%d.jpg", i);//输出到上级目录的output文件夹下
-			imwrite(name, frame);//输出一张jpg图片到工程目录下
-			writer << frame;
-			sprintf(name, "%d", i);
-			putText(frame, name, Point(0, 20), FONT_HERSHEY_SIMPLEX,
-				0.6, Scalar(0, 255, 0));
-			imshow("读取视频", frame);  //显示当前帧
-			writer << frame;
-			waitKey(10);  //延时30ms
-		}
-	}
-	return;
 }
 
 
@@ -148,45 +146,7 @@ vector<Vec2f> FindLine(Mat source, int arg)
 	return edges;
 }
 
-void ObjectDetect(VideoCapture cap)
-{
-	Mat frame1, frame2, diff;
-	cap >> frame2;
 
-	namedWindow("video", WINDOW_NORMAL);
-
-	for (;;) {
-		frame1 = frame2.clone();
-		cap >> frame2;
-		if (frame2.empty())
-			break;
-		//diff = frame1 - frame2;
-		Mat gray_diff, gray1, gray2;
-		cvtColor(frame1, gray1, COLOR_RGB2GRAY);
-		cvtColor(frame2, gray2, COLOR_RGB2GRAY);
-		//cvtColor(diff, gray_diff, COLOR_RGB2GRAY);
-
-		threshold(gray1, gray1, 15, 255, CV_THRESH_OTSU);
-		//threshold(gray2, gray2, 100, 255, CV_THRESH_BINARY);
-
-		gray_diff = gray1 - gray2;
-		//threshold(gray_diff, gray_diff, 15, 255, CV_THRESH_OTSU);
-		GaussianBlur(gray_diff, gray_diff, Size(3, 5), 0, 0);
-		threshold(gray_diff, gray_diff, 15, 255, CV_THRESH_BINARY);
-
-		gray1 = gray1 / 2;
-		//imshow("video", gray1);
-		int key_value = waitKey(15);
-		if (key_value != 255)
-		{
-			if (key_value == 27) break;		//press ESC to break
-			else {
-				key_value = waitKey(100000);
-				if (key_value == 27) break;
-			}
-		}
-	}
-}
 
 vector<Vec2f> FindRoadEdge(VideoCapture cap)
 {
@@ -194,25 +154,25 @@ vector<Vec2f> FindRoadEdge(VideoCapture cap)
 	Mat background, src, current;
 	
 	//找出一个平均背景
-	for (int i = 1; i < 600; i++) {
-		cap >> src;
-		if (i == 1) {
-			background = src.clone();
-			current = src.clone();
-		}
-		else {
-			background = (current * (i - 1) + src) / i;
-			current = background.clone();
-		}
-		cout << i << endl;
-		//imshow("video", background);
-		//waitKey(1000);
-		/*if (waitKey(20) != 255) {
-			int n = waitKey(10000);
-			if (n == 27) break;
-		}*/
-	}
-	imwrite("background.png", background);
+	//for (int i = 1; i < 600; i++) {
+	//	cap >> src;
+	//	if (i == 1) {
+	//		background = src.clone();
+	//		current = src.clone();
+	//	}
+	//	else {
+	//		background = (current * (i - 1) + src) / i;
+	//		current = background.clone();
+	//	}
+	//	cout << i << endl;
+	//	//imshow("video", background);
+	//	//waitKey(1000);
+	//	/*if (waitKey(20) != 255) {
+	//		int n = waitKey(10000);
+	//		if (n == 27) break;
+	//	}*/
+	//}
+	//imwrite("background.png", background);
 	
 	background = imread("background.png");
 	//namedWindow("video", WINDOW_NORMAL);
@@ -323,7 +283,7 @@ vector<Vec2f> LineExtract(vector<Vec4i> lines, Mat img)
 
 	cvtColor(img, dst, CV_RGB2GRAY);
 	vector<Vec2f> v2f_lines;		//Vec2f定义:typedef Vec<float, 2> Vec2f;
-	HoughLines(dst, v2f_lines, 1, CV_PI / 180, 160);
+	HoughLines(dst, v2f_lines, 1, CV_PI / 180, 180);
 
 
 	/*imshow("Detected Lines", img);
@@ -369,14 +329,37 @@ vector<Vec2f> LineExtract(vector<Vec4i> lines, Mat img)
 
 }
 
-void DrawLine(Vec2f edge, Mat img) {
-	float rho = edge[0];
-	float theta = edge[1];
-	double a = cos(theta), b = sin(theta);
-	double x0 = a*rho, y0 = b*rho;
-	Point pt1(cvRound(x0 + 1000 * (-b)),
-		cvRound(y0 + 1000 * (a)));
-	Point pt2(cvRound(x0 - 1000 * (-b)),
-		cvRound(y0 - 1000 * (a)));
-	line(img, pt1, pt2, Scalar(0, 255, 255), 3, 8);
+void extract_video() {
+	//【1】读入视频
+	VideoCapture capture("data/4-12-17-A.MP4");
+
+	VideoWriter writer("data/A_cut_test.avi", CV_FOURCC('M', 'J', 'P', 'G'), 29, Size(1920, 1080));//注意此处视频的尺寸大小要与真实的一致
+																								   //【2】循环显示每一帧
+	int i = 0;
+	char name[50];
+	while (1)
+	{
+		Mat frame;//定义一个Mat变量，用于存储每一帧的图像
+		capture >> frame;  //读取当前帧
+		i++;
+		//若视频播放完成，退出循环
+		if (frame.empty())
+		{
+			break;
+		}
+
+		if (i>0 && i < 1000)
+		{
+			sprintf(name, "pictures\\%d.jpg", i);//输出到上级目录的output文件夹下
+			imwrite(name, frame);//输出一张jpg图片到工程目录下
+			writer << frame;
+			sprintf(name, "%d", i);
+			putText(frame, name, Point(0, 20), FONT_HERSHEY_SIMPLEX,
+				0.6, Scalar(0, 255, 0));
+			imshow("读取视频", frame);  //显示当前帧
+			writer << frame;
+			waitKey(10);  //延时30ms
+		}
+	}
+	return;
 }
