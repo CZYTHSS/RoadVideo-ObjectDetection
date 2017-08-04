@@ -13,6 +13,6 @@
 using namespace std;
 using namespace cv;
 
-void ObjectDetect(VideoCapture cap, vector<Vec2f> edges);
+void ObjectDetect(string data_path, vector<Vec2f> edges);
 
 void vehicleDetection();

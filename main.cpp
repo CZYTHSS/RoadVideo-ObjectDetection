@@ -35,8 +35,9 @@ bool Vec2fsort(Vec2f i, Vec2f j) {
 int main()
 {
 	//extract_video();
+	string data_path = "data/clip_9.mp4";
 
-	VideoCapture cap("data/clip_2.mp4");
+	VideoCapture cap(data_path);
 
 	if (!cap.isOpened()) {
 		cerr << "can't open the video file!" << endl;
@@ -83,7 +84,7 @@ int main()
 	waitKey(0);
 
 	//侦测行人以及车辆
-	ObjectDetect(cap, edges);
+	ObjectDetect(data_path, edges);
 
 	return 0;
 }
