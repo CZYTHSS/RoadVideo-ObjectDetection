@@ -29,6 +29,23 @@ void DrawLine(Vec2f edge, Mat img) {
 	line(img, pt1, pt2, Scalar(255), 3, 8);
 }
 
+void ReadFrames(VideoCapture cap, vector<Mat> &frames, int &frame_num)
+{
+	cout << "Reading Video Frames:" << endl;
+	frame_num = 0;
+	Mat frame;
+	for (;;) {
+		cap >> frame;
+		if (frame.empty())
+			break;
+		Mat temp;
+		frame.copyTo(temp);
+		frames.push_back(temp);
+		frame_num++;
+		if (frame_num % 50 == 0) cout << frame_num << endl;
+	}
+}
+
 void BoundingBox::initBox(int xl, vector<Vec2f> edges, Vec2f pers_point, Mat src, String flag)
 {
 	img = src;

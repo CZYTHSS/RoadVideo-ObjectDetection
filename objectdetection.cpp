@@ -17,65 +17,60 @@ int max_frame_interval = 15;
 int min_frame_length = 7;
 int min_total_frame = 7;
 int thresh_min = 500;
-void ObjectDetect(string data_path, vector<Vec2f> edges)
+void ObjectDetect(vector<Mat> &frames, vector<Vec2f> edges, int frame_num)
 {
 
-	VideoCapture cap(data_path);
+
 	//计算两条边界的交点
 	Vec2f perspective_point = CalPerspectivePoint(edges);
-	//cout << "perspective point:" << endl;
-	//cout << perspective_point[0] << "," << perspective_point[1] << endl;
-
-	Mat frame1, frame2, diff;
-	cap >> frame2;
-
 
 	BoundingBox box1;
-	box1.initBox(0, edges, perspective_point, frame2, "down");
+	box1.initBox(0, edges, perspective_point, frames[0], "down");
 	
-	VideoCapture cap2(data_path);
-	int frn = cap2.get(CV_CAP_PROP_FRAME_COUNT);
-	int *enter_pixels = new int[frn];
-	memset(enter_pixels, 0, frn);
+	int *enter_pixels = new int[frame_num];
+	memset(enter_pixels, 0, frame_num);
 	int count = 0;
 
-	//读取整个视频，统计entrance位置的像素和，并与count(帧数)一起存在array.txt里
-	//for (;;) {
-	//	frame1 = frame2.clone();
-	//	cap2 >> frame2;
-	//	if (frame2.empty())
-	//		break;
-	//	diff = frame1 - frame2;
-	//	Mat gray_diff, gray1, gray2;
-	//	cvtColor(frame1, gray1, COLOR_RGB2GRAY);
-	//	cvtColor(frame2, gray2, COLOR_RGB2GRAY);
-	//	//cvtColor(diff, gray_diff, COLOR_RGB2GRAY);
+	//读取整个视频，统计entrance位置的像素和，并与count(帧数)一起存在array.txt里. enter_pixels[i]表示的是第i帧与i-1帧的差值做的统计结果
+	for (int i = 1; i < frame_num; i++) {
+		Mat frame1, frame2, diff;
+		frames[i - 1].copyTo(frame1);
+		frames[i].copyTo(frame2);
+		if (frame2.empty())
+			break;
+		diff = frame1 - frame2;
+		Mat gray_diff, gray1, gray2;
+		cvtColor(frame1, gray1, COLOR_RGB2GRAY);
+		cvtColor(frame2, gray2, COLOR_RGB2GRAY);
+		//cvtColor(diff, gray_diff, COLOR_RGB2GRAY);
 
-	//	//threshold(gray1, gray1, 15, 255, CV_THRESH_OTSU);
-	//	//threshold(gray2, gray2, 100, 255, CV_THRESH_BINARY);
+		//threshold(gray1, gray1, 15, 255, CV_THRESH_OTSU);
+		//threshold(gray2, gray2, 100, 255, CV_THRESH_BINARY);
 
-	//	gray_diff = gray1 - gray2;
-	//	//threshold(gray_diff, gray_diff, 15, 255, CV_THRESH_OTSU);
-	//	//GaussianBlur(gray_diff, gray_diff, Size(3, 5), 0, 0);
-	//	//threshold(gray_diff, gray_diff, 10, 255, CV_THRESH_BINARY);
-	//	int sum = 0;
-	//	for (int i = box1.p1.y; i < box1.p3.y; i++) {
-	//		sum += gray_diff.at<uchar>(i, 1);
-	//	}
-	//	enter_pixels[count] = sum;
-	//	count++;
-	//	if (count % 50 == 0) cout << count << endl;
+		gray_diff = gray1 - gray2;
+		//imshow("gray_diff", gray_diff);
+		//waitKey(0);
+		//threshold(gray_diff, gray_diff, 15, 255, CV_THRESH_OTSU);
+		//GaussianBlur(gray_diff, gray_diff, Size(3, 5), 0, 0);
+		//threshold(gray_diff, gray_diff, 10, 255, CV_THRESH_BINARY);
+		int sum = 0;
+		for (int i = box1.p1.y; i < box1.p3.y; i++) {
+			sum += gray_diff.at<uchar>(i, 10);
+		}
+		enter_pixels[count] = sum;
+		count++;
+		if (count % 50 == 0) cout << count << endl;
 
-	//}
-	//ofstream fout;
-	//fout.open("array.txt");
-	//fout << count << endl;
-	//for (int i = 0; i < count; i++) {
-	//	fout << enter_pixels[i] << endl;
-	//}
-	//fout.close();
-
+	}
 	ofstream fout;
+	fout.open("array.txt");
+	fout << count << endl;
+	for (int i = 0; i < count; i++) {
+		fout << enter_pixels[i] << endl;
+	}
+	fout.close();
+
+	//ofstream fout;
 	ifstream fin;
 	fin.open("array.txt");
 	fin >> count;
@@ -174,19 +169,19 @@ void ObjectDetect(string data_path, vector<Vec2f> edges)
 
 	namedWindow("video", WINDOW_NORMAL);
 
-
-	cap >> frame2;
+	
 	//namedWindow("video", WINDOW_NORMAL);
-	for (int i = 0; i < count; i++) {
-		frame1 = frame2.clone();
-		cap >> frame2;
+	for (int i = 1; i < count; i++) {
+		Mat frame2, frame1, diff;
+		frames[i - 1].copyTo(frame1);
+		frames[i].copyTo(frame2);
 		if (frame2.empty())
 			break;
 
 		if (i % 50 == 0) cout << i << endl;
 		bool in_range;
 		for (int n = 0; n < continue_1.size(); n++) {
-			if (i >= continue_1[n][0] && i <= continue_1[n][1]) {
+			if (i - 1 >= continue_1[n][0] && i - 1 <= continue_1[n][1]) {
 				in_range = true;
 				break;
 			}
@@ -218,14 +213,16 @@ void ObjectDetect(string data_path, vector<Vec2f> edges)
 
 
 		//逐帧播放视频
-		if(in_range) imshow("video", gray_diff);
-		int key_value = waitKey(15);
-		if (key_value != 255)
-		{
-			if (key_value == 27) break;		//press ESC to break
-			else {
-				key_value = waitKey(100000);
-				if (key_value == 27) break;
+		if (in_range) {
+			imshow("video", gray_diff);
+			int key_value = waitKey(15);
+			if (key_value != 255)
+			{
+				if (key_value == 27) break;		//press ESC to break
+				else {
+					key_value = waitKey(100000);
+					if (key_value == 27) break;
+				}
 			}
 		}
 	}

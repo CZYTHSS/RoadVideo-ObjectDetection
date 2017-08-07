@@ -31,3 +31,5 @@ public:
 
 	void drawBox(Mat img);
 };
+
+void ReadFrames(VideoCapture cap, vector<Mat> &frames, int &frame_num);
