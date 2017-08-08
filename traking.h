@@ -8,12 +8,10 @@
 #include "opencv2/highgui.hpp"
 #include <math.h>
 #include <fstream>
-#include "traking.h"
+#include "utils.h"
 #define PI 3.14159265
 
 using namespace std;
 using namespace cv;
 
-void ObjectDetect(vector<Mat> &frames, vector<Vec2f> edges, int frame_num);
-
-void vehicleDetection();
+void VehicleTracking(vector<Mat> frames, vector<Vec2f> edges, int frame_num);

@@ -16,7 +16,7 @@ using namespace cv;
 
 void extract_video();	//函数内可以修改读取文件名，输出文件名，编码格式以及帧数范围
 vector<Vec2f> FindLine(Mat source, int arg);
-vector<Vec2f> FindRoadEdge(VideoCapture cap);
+vector<Vec2f> FindRoadEdge(const vector<Mat> &cap);
 vector<Vec2f> LineExtract(vector<Vec4i> lines, Mat img);		//从Hough Transform中提取的线段数据中找出代表路基的两条
 
 bool Vec4isort(Vec4i i, Vec4i j) {
@@ -35,7 +35,7 @@ bool Vec2fsort(Vec2f i, Vec2f j) {
 int main()
 {
 	//extract_video();
-	string data_path = "data/clip_4.mp4";
+	string data_path = "data/test.mp4";
 
 	VideoCapture cap(data_path);
 
@@ -50,7 +50,7 @@ int main()
 	}
 	
 	//检测马路边界，确定监控范围
-	vector<Vec2f> edges = FindRoadEdge(cap);		//这里返回检测部分的路边界，以极坐标表示，edges[0],edges[1]分别是上下边界。edges[0][0]是r, edges[0][1]是theta。 edges[1]同理
+	vector<Vec2f> edges = FindRoadEdge(frames);		//这里返回检测部分的路边界，以极坐标表示，edges[0],edges[1]分别是上下边界。edges[0][0]是r, edges[0][1]是theta。 edges[1]同理
 	Mat img = imread("background.png");
 	DrawLine(edges[0], img);
 	DrawLine(edges[1], img);
@@ -87,9 +87,12 @@ int main()
 	namedWindow("edges", WINDOW_NORMAL);
 	imshow("edges", img);
 	waitKey(0);
+	destroyWindow("edges");
 
 	//侦测行人以及车辆
-	ObjectDetect(frames, edges, frame_num);
+	//ObjectDetect(frames, edges, frame_num);
+
+	VehicleTracking(frames, edges, frame_num);
 
 	return 0;
 }
@@ -154,21 +157,24 @@ vector<Vec2f> FindLine(Mat source, int arg)
 
 
 
-vector<Vec2f> FindRoadEdge(VideoCapture cap)
+vector<Vec2f> FindRoadEdge(const vector<Mat> &cap)
 {
 	
 	Mat background, src, current;
 	
+	int max_frame;
+	if (cap.size() < 600) max_frame = cap.size() - 1;
+	else max_frame = 600;
 	//找出一个平均背景
-	//for (int i = 1; i < 600; i++) {
-	//	cap >> src;
+	//for (int i = 1; i < max_frame; i++) {
+	//	cap[i].copyTo(src);
 	//	if (i == 1) {
-	//		background = src.clone();
-	//		current = src.clone();
+	//		src.copyTo(background);
+	//		src.copyTo(current);
 	//	}
 	//	else {
 	//		background = (current * (i - 1) + src) / i;
-	//		current = background.clone();
+	//		background.copyTo(current);
 	//	}
 	//	cout << i << endl;
 	//	//imshow("video", background);

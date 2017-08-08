@@ -23,6 +23,9 @@ public:
 	float au, bu, ad, bd;	//a,b用来表示boundingBox的上下边界, y = ax + b; u -- up, d -- down, m -- middle
 	float box_width;
 	Mat img;
+	Vec2f pp;	//perspective point
+	enum vehicle { car, truck };
+	vehicle type;
 
 	void initBox(int x0, vector<Vec2f> edges, Vec2f pers_point, Mat img, String flag);
 	BoundingBox() {
@@ -30,6 +33,7 @@ public:
 	}
 
 	void drawBox(Mat img);
+	void modifyBox();
 };
 
 void ReadFrames(VideoCapture cap, vector<Mat> &frames, int &frame_num);

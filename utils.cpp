@@ -48,6 +48,7 @@ void ReadFrames(VideoCapture cap, vector<Mat> &frames, int &frame_num)
 
 void BoundingBox::initBox(int xl, vector<Vec2f> edges, Vec2f pers_point, Mat src, String flag)
 {
+	pp = pers_point;
 	img = src;
 	//初始化au, bu,在这里求出的au, bu是路中间黄线的参数
 	Point pu, pd;
@@ -124,4 +125,14 @@ void BoundingBox::drawBox(Mat img)
 	line(img, p2, p4, Scalar(200), 3, 8);
 	line(img, p3, p4, Scalar(200), 3, 8);
 	line(img, p3, p1, Scalar(200), 3, 8);
+}
+
+void BoundingBox::modifyBox()
+{
+	if (type == car) {
+		box_width = 480;
+	}
+	else if (type == truck) {
+		box_width = 800;
+	}
 }
