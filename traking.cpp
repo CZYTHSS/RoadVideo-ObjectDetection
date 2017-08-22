@@ -5,9 +5,11 @@ float seg_ratio = 3.0;	//this is used when segmentate the car from gray_diff ima
 int min_thresh = 800;	//the min_thresh when segmentate the car from gray_diff image
 int max_gap = 300;	//determine the gap bewteen cars
 
-void VehicleTracking(vector<Mat> frames, vector<Vec2f> edges, int frame_num)
+void VehicleTracking(vector<Mat> frames, vector<Vec2f> edges, int frame_num, Mat H)
 {
 	Vec2f pers_point = CalPerspectivePoint(edges);
+
+	//读取vehicle_frame.txt中储存的车辆分类信息
 	ifstream fin;
 	fin.open("vehicle_frames.txt");
 	vector<Vec2i> vehicles;
@@ -21,6 +23,7 @@ void VehicleTracking(vector<Mat> frames, vector<Vec2f> edges, int frame_num)
 	}
 	fin.close();
 
+	//为每个车辆确定BoundingBox以及车辆种类
 	namedWindow("diff", WINDOW_NORMAL);
 	vector<BoundingBox> boxes;
 	for (int i = 0; i < vehicles.size(); i++) {
@@ -32,8 +35,8 @@ void VehicleTracking(vector<Mat> frames, vector<Vec2f> edges, int frame_num)
 		Mat diff = frame1 - frame2;
 		Mat gray_diff;
 		cvtColor(diff, gray_diff, COLOR_RGB2GRAY);
-		imshow("diff", gray_diff);
-		waitKey(0);
+		//imshow("diff", gray_diff);
+		//waitKey(0);
 		BoundingBox temp;
 		temp.initBox(0, edges, pers_point, frame1, "down");
 
@@ -95,91 +98,130 @@ void VehicleTracking(vector<Mat> frames, vector<Vec2f> edges, int frame_num)
 					if (gap[0] < 500) {
 						temp.type = BoundingBox::car;
 						temp.modifyBox();
+						break;
+					}
+					else if (gap[0] >= 500) {
+						temp.type = BoundingBox::truck;
+						temp.modifyBox();
+						break;
 					}
 				}
 			}
 			previous_num = pixels[j];
 		}
+		temp.trajectory.push_back(calCenter(gray_diff, temp, last_frame));
 
-
-		ofstream fout;
-		fout.open("pixels.txt");
-		for (int j = 0; j < pixels.size(); j++) {
-			fout << pixels[j] << endl;
-		}
-		fout.close();
+		boxes.push_back(temp);
 
 	}
-
-
-
-	namedWindow("video", WINDOW_NORMAL);
-	for (int i = 1; i < frame_num; i++) {
-		Mat frame2, frame1, diff;
-		frames[i - 1].copyTo(frame1);
-		frames[i].copyTo(frame2);
-		if (frame2.empty())
-			break;
-
-		if (i % 50 == 0) cout << i << endl;
-		bool in_range;
-		for (int n = 0; n < vehicles.size(); n++) {
-			if (i - 1 >= vehicles[n][0] && i - 1 <= vehicles[n][1]) {
-				in_range = true;
-				break;
-			}
-			else in_range = false;
-		}
-		//if (in_range == false) continue;
-
-		diff = frame1 - frame2;
-		Mat gray_diff, gray1, gray2;
-		//cvtColor(frame1, gray1, COLOR_RGB2GRAY);
-		//cvtColor(frame2, gray2, COLOR_RGB2GRAY);
+	//上述代码找到判定为车辆的位置并生成BoundingBox
+	
+	//逐帧计算center
+	/*for (int j = 0; j < boxes.size(); j++) {
+		Mat f1, f2;
+		frames[boxes[j].trajectory[0].frame].copyTo(f1);
+		frames[boxes[j].trajectory[0].frame + 1].copyTo(f2);
+		Mat diff = f1 - f2;
+		Mat gray_diff;
 		cvtColor(diff, gray_diff, COLOR_RGB2GRAY);
+		circle(f2, Point(boxes[j].trajectory[0].x, boxes[j].trajectory[0].y), 5, Scalar(255), 2);
+		imshow("diff", f2);
+		waitKey(0);
+	}*/		//测试代码，看看质心画在哪了
 
-		//threshold(gray1, gray1, 15, 255, CV_THRESH_OTSU);
-		//threshold(gray2, gray2, 100, 255, CV_THRESH_BINARY);
 
-		//gray_diff = gray1 - gray2;
-		//threshold(gray_diff, gray_diff, 15, 255, CV_THRESH_OTSU);
-		GaussianBlur(gray_diff, gray_diff, Size(3, 5), 0, 0);
-		//threshold(gray_diff, gray_diff, 10, 255, CV_THRESH_BINARY);
+	for (int j = 0; j < boxes.size(); j++) {
+		boxes[j].trajectory[0].y = boxes[j].trajectory[0].x * boxes[j].am + boxes[j].bm;
+		for (int n = boxes[j].trajectory[0].frame + 1; n < frames.size(); n++) {
+			boxes[j].resize();
+			Mat f1, f2, diff, gray_diff, g2;
+			frames[n].copyTo(f2);
+			frames[n - 1].copyTo(f1);
+			diff = f1 - f2;
+			cvtColor(diff, gray_diff, COLOR_RGB2GRAY);
+			Trajectory t = calCenter(gray_diff, boxes[j], n);
+			t.y = t.x * boxes[j].am + boxes[j].bm;
+			boxes[j].trajectory.push_back(t);
+			if (boxes[j].p2.x >= f1.cols) break;
 
-		//DrawLine(edges[0], gray_diff);
-		//DrawLine(edges[1], gray_diff);
-		Vec2f perspective_point = CalPerspectivePoint(edges);
-		BoundingBox box1;
-		box1.initBox(0, edges, perspective_point, gray2, "down");
-		vector<Point2f> corners;
+			cvtColor(f2, g2, COLOR_RGB2GRAY);
+			//Canny(g2, g2, 50, 150);
+			threshold(gray_diff, gray_diff, 25, 200, THRESH_BINARY);
+			boxes[j].drawBox(f2);
+			circle(f2, Point(boxes[j].trajectory.back().x, boxes[j].trajectory.back().y), 5, Scalar(255), 2);
 
-		Mat crop_gray;
-		crop_gray.create(gray2.size(), gray2.type());
-		int margin = 0;
-		for (int y = 0; y < gray2.rows; y++) {
-			if (y < box1.p1.y - margin - 50 || y > box1.p3.y + margin) continue;
-			for (int x = 0; x < gray2.cols; x++) {
-				if (box1.au * x + box1.bu - margin <= y && box1.ad * x + box1.bd + margin >= y) crop_gray.at<uchar>(y, x) = gray2.at<uchar>(y, x);
+
+			imshow("diff", f2);
+			int key_value = waitKey(10);
+			if (key_value != 255)
+			{
+				if (key_value == 27) break;		//press ESC to break
+				else {
+					key_value = waitKey(100000);
+					if (key_value == 27) break;
+				}
 			}
-		}
-
-		goodFeaturesToTrack(crop_gray, corners, 50, 0.05, 30);
-
-		for (int m = 0; m < corners.size(); m++) {
-			circle(crop_gray, corners[m], 5, Scalar(255));
-		}
-
-		box1.drawBox(crop_gray);
-		//逐帧播放视频
-		imshow("video", gray_diff);
-		int key_value = waitKey(15);
-		if (key_value != 255)
-		{
-			if (key_value == 27) break;		//press ESC to break
-			else {
-				key_value = waitKey(100000);
-				if (key_value == 27) break;
-			}
+			cout << "j = " << j << ";  n = " << n << endl;
 		}
 	}
+	//将轨迹存储在txt文件中
+	ofstream ftr;
+	ftr.open("trajectory/tra.txt");
+	ftr << "test:" << endl;
+	for (int j = 0; j < boxes.size(); j++) {
+		vector<Point2f> ori_traj(boxes[j].trajectory.size()), trans_traj(boxes[j].trajectory.size());
+		for (int n = 0; n < boxes[j].trajectory.size(); n++) {
+			ori_traj[n].x = boxes[j].trajectory[n].x;
+			ori_traj[n].y = boxes[j].trajectory[n].y;
+		}
+		perspectiveTransform(ori_traj, trans_traj, H);
+		ftr << "car 1:" << endl;
+		for (int n = 0; n < boxes[j].trajectory.size(); n++) {
+			ftr << "(" << boxes[j].trajectory[n].frame << "," << trans_traj[n].x << "," << trans_traj[n].y << ") ";
+		}
+		ftr << endl;
+	}
+	
+}
+
+Trajectory calCenter(Mat gray_diff, BoundingBox box, int frame_num)
+{
+	long long sum_x = 0, sum_y = 0, count = 0, mass = 0;
+	for (int x = box.p1.x; x < box.p2.x + box.max_extend; x++) {
+		for (int y = box.au * x + box.bu; y < box.ad * x + box.bd; y++) {
+			mass += gray_diff.at<uchar>(y, x);
+			//sum_x += x * gray_diff.at<uchar>(y, x);
+			//sum_y += y * gray_diff.at<uchar>(y, x);
+			if (gray_diff.at<uchar>(y, x) > 25) {
+				sum_x += x;
+				sum_y += y;
+				count++;
+			}
+		}
+		if (x >= gray_diff.cols - 1) break;
+	}
+	int cx, cy;
+	/*if (mass != 0) {
+		cx = sum_x / mass;
+		cy = sum_y / mass;
+	}
+	else {
+		cx = box.trajectory.back().x;
+		cy = box.trajectory.back().y;
+	}*/
+	if (count != 0) {
+		cx = sum_x / count;
+		cy = sum_y / count;
+	}
+	else {
+		cx = box.trajectory.back().x;
+		cy = box.trajectory.back().y;
+	}
+	if (count < 200) {
+		box.max_speed = 1;
+	}
+	else box.max_speed = 20;
+	if (box.trajectory.size() > 0 && cx <= box.trajectory.back().x) cx = box.trajectory.back().x;
+	if (box.trajectory.size() > 0 && cx - box.trajectory.back().x > box.max_speed) cx = box.trajectory.back().x + box.max_speed;
+	return Trajectory(frame_num, cx, cy);
 }

@@ -171,59 +171,6 @@ void ObjectDetect(vector<Mat> &frames, vector<Vec2f> edges, int frame_num)
 	}
 	fout.close();
 
-
-
-	//namedWindow("video", WINDOW_NORMAL);
-	//for (int i = 1; i < count; i++) {
-	//	Mat frame2, frame1, diff;
-	//	frames[i - 1].copyTo(frame1);
-	//	frames[i].copyTo(frame2);
-	//	if (frame2.empty())
-	//		break;
-
-	//	if (i % 50 == 0) cout << i << endl;
-	//	bool in_range;
-	//	for (int n = 0; n < continue_1.size(); n++) {
-	//		if (i - 1 >= continue_1[n][0] && i - 1 <= continue_1[n][1]) {
-	//			in_range = true;
-	//			break;
-	//		}
-	//		else in_range = false;
-	//	}
-	//	if (in_range == false) continue;
-
-	//	diff = frame1 - frame2;
-	//	Mat gray_diff, gray1, gray2;
-	//	cvtColor(frame1, gray1, COLOR_RGB2GRAY);
-	//	cvtColor(frame2, gray2, COLOR_RGB2GRAY);
-	//	//cvtColor(diff, gray_diff, COLOR_RGB2GRAY);
-
-	//	//threshold(gray1, gray1, 15, 255, CV_THRESH_OTSU);
-	//	//threshold(gray2, gray2, 100, 255, CV_THRESH_BINARY);
-
-	//	gray_diff = gray1 - gray2;
-	//	//threshold(gray_diff, gray_diff, 15, 255, CV_THRESH_OTSU);
-	//	GaussianBlur(gray_diff, gray_diff, Size(3, 5), 0, 0);
-	//	//threshold(gray_diff, gray_diff, 10, 255, CV_THRESH_BINARY);
-
-	//	DrawLine(edges[0], gray_diff);
-	//	DrawLine(edges[1], gray_diff);
-
-
-	//	//ÖðÖ¡²¥·ÅÊÓÆµ
-	//	if (in_range) {
-	//		imshow("video", gray_diff);
-	//		int key_value = waitKey(15);
-	//		if (key_value != 255)
-	//		{
-	//			if (key_value == 27) break;		//press ESC to break
-	//			else {
-	//				key_value = waitKey(100000);
-	//				if (key_value == 27) break;
-	//			}
-	//		}
-	//	}
-	//}
 }
 
 void vehicleDetection()

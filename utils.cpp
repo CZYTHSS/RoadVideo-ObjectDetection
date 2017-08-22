@@ -117,6 +117,12 @@ void BoundingBox::initBox(int xl, vector<Vec2f> edges, Vec2f pers_point, Mat src
 		p2.y = au * p2.x + bu;
 		p4.y = ad * p4.x + bd;
 	}
+
+	float my, mx;
+	my = (p1.y + p3.y) / 2;
+	mx = p1.x;
+	am = (pp.y - my) / (pp.x - mx);
+	bm = (pp.x * my - mx * pp.y) / (pp.x - mx);
 }
 
 void BoundingBox::drawBox(Mat img)
@@ -130,9 +136,36 @@ void BoundingBox::drawBox(Mat img)
 void BoundingBox::modifyBox()
 {
 	if (type == car) {
-		box_width = 480;
+		box_width = 350;
 	}
 	else if (type == truck) {
-		box_width = 800;
+		box_width = 500;
+		p2.x = box_width;
+		p4.x = box_width;
+		p2.y = au * p2.x + bu;
+		p4.y = ad * p4.x + bd;
 	}
+}
+
+void BoundingBox::resize()
+{
+	Trajectory t = trajectory.back();
+	if (t.x <= box_width / 2) return;
+	float scale;
+	if (trajectory.size() <= 1) scale = ((ad * t.x + bd) - (au * t.x + bu)) / ((ad * box_width / 2 + bd) - (au * box_width / 2 + bu));
+	else {
+		scale = ((ad * t.x + bd) - (au * t.x + bu)) / 
+			((ad * trajectory[trajectory.size() - 2].x + bd) - (au * trajectory[trajectory.size() - 2].x + bu));
+	}
+	box_width = box_width * scale;		//refresh box_width
+	p1.x = t.x - box_width / 2;
+	p3.x = p1.x;
+	p2.x = t.x + box_width / 2;
+	p4.x = p2.x;
+	p1.y = au * p1.x + bu;
+	p2.y = au * p2.x + bu;
+	p3.y = ad * p3.x + bd;
+	p4.y = ad * p4.x + bd;
+	max_extend = max_extend * scale;
+	//max_speed = max_speed * scale;
 }

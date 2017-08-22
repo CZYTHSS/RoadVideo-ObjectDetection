@@ -8,13 +8,14 @@
 #include <math.h>
 #include "utils.h"
 #include "objectdetection.h"
+#include "matching.h"
+#include "mouseevent.h"
 #define PI 3.14159265
 
 
 using namespace std;
 using namespace cv;
 
-void extract_video();	//函数内可以修改读取文件名，输出文件名，编码格式以及帧数范围
 vector<Vec2f> FindLine(Mat source, int arg);
 vector<Vec2f> FindRoadEdge(const vector<Mat> &cap);
 vector<Vec2f> LineExtract(vector<Vec4i> lines, Mat img);		//从Hough Transform中提取的线段数据中找出代表路基的两条
@@ -34,8 +35,11 @@ bool Vec2fsort(Vec2f i, Vec2f j) {
 
 int main()
 {
+	Lines lines = ClickPoints();
+	//获取到世界坐标的homography
+	Mat H = FindWorldHomography();
 	//extract_video();
-	string data_path = "data/test.mp4";
+	string data_path = "data/B_test.mp4";
 
 	VideoCapture cap(data_path);
 
@@ -54,9 +58,10 @@ int main()
 	Mat img = imread("background.png");
 	DrawLine(edges[0], img);
 	DrawLine(edges[1], img);
+	Vec2f perspective_point = CalPerspectivePoint(edges);
 
 	Point p1, p2;
-	for (int i = 0; i <= 1; i++) {
+	/*for (int i = 0; i <= 1; i++) {
 		int width = img.cols;
 		float rho = edges[i][0];
 		float theta = edges[i][1];
@@ -70,14 +75,13 @@ int main()
 		if (i == 0) p1 = pt1;
 		else p2 = pt1;
 	}
-	Vec2f perspective_point = CalPerspectivePoint(edges);
 	Point p0(0, 0);
 	p0.y = p1.y + (p2.y - p1.y) * 0.66;
 	Point p4(perspective_point[0], perspective_point[1]);
 	line(img, p0, p4, Scalar(255), 3, 8);
 	Point p01(0, 0);
 	p01.y = p1.y + (p2.y - p1.y) * 0.31;
-	line(img, p01, p4, Scalar(255), 3, 8);
+	line(img, p01, p4, Scalar(255), 3, 8);*/
 
 	BoundingBox box1;
 	box1.initBox(0, edges, perspective_point, img, "up");
@@ -92,7 +96,7 @@ int main()
 	//侦测行人以及车辆
 	//ObjectDetect(frames, edges, frame_num);
 
-	VehicleTracking(frames, edges, frame_num);
+	VehicleTracking(frames, edges, frame_num, H);
 
 	return 0;
 }
@@ -341,37 +345,3 @@ vector<Vec2f> LineExtract(vector<Vec4i> lines, Mat img)
 
 }
 
-void extract_video() {
-	//【1】读入视频
-	VideoCapture capture("data/4-12-17-A.MP4");
-
-	VideoWriter writer("data/A_cut_test.avi", CV_FOURCC('M', 'J', 'P', 'G'), 29, Size(1920, 1080));//注意此处视频的尺寸大小要与真实的一致
-																								   //【2】循环显示每一帧
-	int i = 0;
-	char name[50];
-	while (1)
-	{
-		Mat frame;//定义一个Mat变量，用于存储每一帧的图像
-		capture >> frame;  //读取当前帧
-		i++;
-		//若视频播放完成，退出循环
-		if (frame.empty())
-		{
-			break;
-		}
-
-		if (i>0 && i < 1000)
-		{
-			sprintf(name, "pictures\\%d.jpg", i);//输出到上级目录的output文件夹下
-			imwrite(name, frame);//输出一张jpg图片到工程目录下
-			writer << frame;
-			sprintf(name, "%d", i);
-			putText(frame, name, Point(0, 20), FONT_HERSHEY_SIMPLEX,
-				0.6, Scalar(0, 255, 0));
-			imshow("读取视频", frame);  //显示当前帧
-			writer << frame;
-			waitKey(10);  //延时30ms
-		}
-	}
-	return;
-}
